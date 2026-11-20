@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Akun - VOXY MARKET</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+  <script src="maintenance-gate.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <div class="logo-area">
+      <img src="logo.png" alt="VOXY">
+      <span class="badge-dot" id="logoBadge"></span>
+      <span class="brand-name"><span class="brand-voxy">VOXY</span> <span class="brand-market">MARKET</span></span>
+    </div>
+  </header>
+  <main class="page">
+    <div class="profile-card">
+      <div class="avatar" id="avatar">U</div>
+      <h2 id="namaUser">User</h2>
+      <p id="emailUser" style="color:var(--muted);font-size:14px">-</p>
+    </div>
+    <div class="menu-list">
+      <a class="menu-item" href="riwayat.html"><i data-lucide="clock"></i> Pesanan Saya</a>
+      <a class="menu-item" href="chat.html"><i data-lucide="message-circle"></i> Chat / Laporan</a>
+      <a class="menu-item" href="home.html"><i data-lucide="home"></i> Beranda</a>
+      <a class="menu-item" id="adminLink" href="admin.html" style="display:none"><i data-lucide="shield"></i> Panel Admin</a>
+      <button class="menu-item" onclick="doLogout()" style="width:100%;text-align:left;color:var(--danger)">
+        <i data-lucide="log-out"></i> Logout
+      </button>
+    </div>
+  </main>
+  <nav class="bottom-nav">
+    <a href="home.html"><i data-lucide="home"></i>Home</a>
+    <a href="riwayat.html"><i data-lucide="receipt"></i>Transaksi</a>
+    <a href="akun.html" class="active"><i data-lucide="user"></i>Akun</a>
+  </nav>
+  <script src="global-orders.js"></script>
+  <script>document.addEventListener("DOMContentLoaded",function(){if(window.VOXY&&VOXY.applyBrandingToPage)VOXY.applyBrandingToPage();});</script>
+  <script>
+    lucide.createIcons();
+    VOXY.requireAuth().then(function (user) {
+      var email = user.email || "-";
+      document.getElementById("emailUser").textContent = email;
+      document.getElementById("namaUser").textContent = email.split("@")[0];
+      document.getElementById("avatar").textContent = (email[0] || "U").toUpperCase();
+      if (VOXY.isAdmin(email)) document.getElementById("adminLink").style.display = "flex";
+      VOXY.listenUserUnread(user.uid, function (unread) {
+        var el = document.getElementById("logoBadge");
+        if (el) el.classList.toggle("show", !!unread);
+      });
+    });
+    function doLogout() {
+      if (!confirm("Yakin logout?")) return;
+      VOXY.logoutUser().then(function () { window.location.href = "login.html"; });
+    }
+  </script>
+  <script src="music-player.js"></script>
+</body>
+</html>

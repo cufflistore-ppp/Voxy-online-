@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Detail Transaksi - VOXY MARKET</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+  <script src="maintenance-gate.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <button class="icon-btn" onclick="history.back()"><i data-lucide="arrow-left"></i></button>
+    <div class="logo-area"><span>Detail Transaksi</span></div>
+    <div style="width:40px"></div>
+  </header>
+  <main class="page" id="content"><div class="empty-state">Memuat...</div></main>
+  <script src="global-orders.js"></script>
+  <script>
+    lucide.createIcons();
+    function statusClass(s) {
+      s = (s || "").toLowerCase();
+      if (s.indexOf("menunggu") !== -1) return "menunggu";
+      if (s.indexOf("proses") !== -1) return "diproses";
+      if (s.indexOf("selesai") !== -1) return "selesai";
+      if (s.indexOf("tolak") !== -1) return "ditolak";
+      return "menunggu";
+    }
+    VOXY.requireAuth().then(function (user) {
+      var kode = new URLSearchParams(location.search).get("kode");
+      if (!kode) {
+        document.getElementById("content").innerHTML = '<div class="empty-state">Kode tidak ditemukan</div>';
+        return;
+      }
+      VOXY.getOrder(kode).then(function (o) {
+        if (!o) {
+          document.getElementById("content").innerHTML = '<div class="empty-state">Pesanan tidak ditemukan</div>';
+          return;
+        }
+        if (o.email !== user.email && o.uid !== user.uid && !VOXY.isAdmin(user.email)) {
+          document.getElementById("content").innerHTML = '<div class="empty-state">Akses ditolak</div>';
+          return;
+        }
+        var html =
+          '<div class="pay-card">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">' +
+          '<h2 style="margin:0">Pesanan ' + (o.kode || "") + '</h2>' +
+          '<span class="badge ' + statusClass(o.status) + '">' + (o.status || "-") + '</span></div>' +
+          '<div class="pay-row"><span>Produk</span><span>' + (o.namaProduk || o.nama || "-") + '</span></div>' +
+          '<div class="pay-row"><span>Kategori</span><span>' + (o.kategori || "-") + '</span></div>' +
+          '<div class="pay-row"><span>Harga</span><span>' + VOXY.formatRp(o.harga) + '</span></div>' +
+          '<div class="pay-row"><span>Tanggal</span><span>' + VOXY.formatTanggal(o.createdAt) + '</span></div>' +
+          (o.linkTarget ? '<div class="pay-row"><span>Link Target</span><span style="word-break:break-all">' + o.linkTarget + '</span></div>' : '') +
+          (o.catatan ? '<div class="pay-row"><span>Catatan</span><span>' + o.catatan + '</span></div>' : '') +
+          (o.catatanAdmin ? '<div class="pay-row"><span>Catatan Admin</span><span>' + o.catatanAdmin + '</span></div>' : '') +
+          '</div>' +
+          '<div class="pay-card" id="boxHasil">' +
+          '<p style="font-size:13px;color:var(--muted)">Hasil akan muncul di sini setelah admin mengirim.</p></div>';
+        document.getElementById("content").innerHTML = html;
+
+        // Pesan sukses jasa suntik
+        var st = (o.status || "").toLowerCase();
+        var isSuntik = (o.tipeKirim === "link_target") || ((o.kategori || "").toLowerCase().indexOf("suntik") !== -1);
+        if (st.indexOf("selesai") !== -1 && isSuntik) {
+          VOXY.getSettings().then(function (s) {
+            var pesan = (s && s.pesanSuntik) || "Coba cek saluran kamu ya. Order sudah diproses admin.";
+            var box = document.getElementById("boxHasil");
+            if (!box) return;
+            var note = document.createElement("div");
+            note.style.cssText = "background:#dcfce7;border:1px solid #86efac;border-radius:12px;padding:12px;margin-bottom:12px;font-size:13px;color:#166534";
+            note.innerHTML = "<b><i class=\"fa-solid fa-circle-check\"></i> Berhasil diproses</b><br>" + pesan.replace(/</g, "&lt;");
+            box.parentNode.insertBefore(note, box);
+          });
+        }
+
+        VOXY.getHasilPesanan(kode).then(function (h) {
+          var box = document.getElementById("boxHasil");
+          if (!box) return;
+          var hasUrl = !!(h.url && h.url.trim());
+          var hasFile = !!(h.file && h.file.data);
+          var hasTeks = !!(h.teks && h.teks.trim());
+          if (!hasUrl && !hasFile && !hasTeks) return;
+
+          var catatan = h.catatan || "Sebelum membuka konten: unduh dulu lewat tombol Download (jika tersedia), install APK/file jika perlu, lalu tekan Lihat untuk membuka hasil.";
+          var parts = [];
+          parts.push('<h2 style="margin-bottom:8px"><i class="fa-solid fa-box"></i> Hasil Pesanan</h2>');
+          parts.push('<div style="background:rgba(59,130,246,.15);border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:12px;font-size:13px;color:#93c5fd;line-height:1.5">');
+          parts.push('<b>Petunjuk:</b><br>' + catatan.replace(/</g,"&lt;").replace(/\n/g,"<br>"));
+          parts.push('</div>');
+          if (hasTeks) {
+            parts.push('<div class="copy-box" id="boxTeks"><b>Akun / Data dari admin:</b><br><pre style="white-space:pre-wrap;margin:8px 0;font-family:inherit">' + h.teks.replace(/</g,'&lt;') + '</pre><button type="button" class="btn btn-sm" onclick="navigator.clipboard.writeText(document.getElementById(\'boxTeks\').innerText.replace(\'Akun / Data dari admin:\\n\',\'\').trim());if(VOXY.showToast)VOXY.showToast(\'Disalin\');">Salin</button></div>');
+          }
+          parts.push('<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">');
+          if (hasUrl) {
+            parts.push('<a class="btn" href="' + h.url.replace(/"/g,"") + '" target="_blank" rel="noopener"><i class="fa-solid fa-eye"></i> Lihat</a>');
+          }
+          if (hasFile) {
+            var nama = (h.file.nama || "hasil").replace(/"/g,"");
+            parts.push('<a class="btn btn-outline" href="' + h.file.data + '" download="' + nama + '">⬇️ Download</a>');
+          } else if (hasUrl) {
+            // URL saja: Download juga bisa buka link yang sama (misal APK di drive)
+            parts.push('<a class="btn btn-outline" href="' + h.url.replace(/"/g,"") + '" target="_blank" rel="noopener">⬇️ Download</a>');
+          }
+          parts.push('</div>');
+          if (hasUrl) {
+            parts.push('<p style="font-size:11px;color:var(--muted);margin-top:10px;word-break:break-all">Link: ' + h.url.replace(/</g,"&lt;") + '</p>');
+          }
+          if (hasFile) {
+            parts.push('<p style="font-size:11px;color:var(--muted);margin-top:6px">File: ' + (h.file.nama || "file") + '</p>');
+          }
+          box.innerHTML = parts.join("");
+        });
+      });
+    });
+  </script>
+  <script src="music-player.js"></script>
+</body>
+</html>

@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pembayaran - VOXY MARKET</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+  <script src="maintenance-gate.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <button class="icon-btn" onclick="history.back()"><i data-lucide="arrow-left"></i></button>
+    <div class="logo-area"><span>Pembayaran</span></div>
+    <div style="width:40px"></div>
+  </header>
+  <main class="page">
+    <div class="pay-card">
+      <h2>Ringkasan Pesanan</h2>
+      <div class="pay-row"><span>Produk</span><span id="namaProduk">-</span></div>
+      <div class="pay-row"><span>Kategori</span><span id="kategori">-</span></div>
+      <div class="pay-row"><span>Total</span><span id="totalHarga">-</span></div>
+    </div>
+    <div class="pay-card">
+      <h2>Transfer / QRIS</h2>
+      <div class="qris-box">
+        <img id="qrisImg" src="qris.jpg" alt="QRIS" onerror="this.style.display='none'">
+        <p style="font-size:13px;color:var(--muted)">Scan QRIS atau transfer ke rekening di bawah</p>
+      </div>
+      <div class="rekening" id="rekeningBox">Memuat info rekening...</div>
+    </div>
+    <div class="pay-card">
+      <h2>Upload Bukti Transfer</h2>
+      <label class="upload-area" for="buktiFile">
+        <i data-lucide="upload" class="upload-icon"></i>
+        <div class="upload-text">Pilih foto bukti TF</div>
+        <div class="upload-hint">Dari galeri atau kamera • JPG / PNG</div>
+        <input type="file" id="buktiFile" accept="image/*">
+      </label>
+      <div class="preview-bukti-wrap">
+        <img id="previewBukti" class="preview-bukti hidden" alt="Preview bukti transfer">
+      </div>
+    </div>
+    <button class="btn" style="width:100%;margin-top:8px" id="btnKonfirmasi" onclick="konfirmasi()">Konfirmasi Pembayaran</button>
+  </main>
+    <div class="site-footer voxy-landing-footer">
+    <div class="voxy-lf-brand">
+      <img src="logo.png" alt="">
+      <div>
+        <div class="voxy-lf-name">VOXY MARKET</div>
+        <div class="voxy-lf-tag">Produk Digital, Akun Premium &amp; Jasa</div>
+      </div>
+    </div>
+    <p class="voxy-lf-desc">Pusat layanan untuk order akun premium, produk digital, APK, jasa suntik, dan kebutuhan digital lainnya.</p>
+    <a href="home.html" class="btn voxy-lf-cta">Lihat Produk</a>
+    <div class="voxy-lf-sec">Bantuan</div>
+    <div class="voxy-lf-links">
+      <a href="riwayat.html">Cek Pesanan</a>
+      <a href="home.html">Buat Pesanan</a>
+      <a href="chat.html">Chat Admin</a>
+    </div>
+    <div class="voxy-lf-sec">Layanan</div>
+    <div class="voxy-lf-list">
+      Akun Premium<br>
+      Produk Digital / APK<br>
+      Jasa Suntik<br>
+      Jasa Lainnya
+    </div>
+    <div class="voxy-lf-copy">
+      Copyright &copy; 2026 VOXY MARKET. All rights reserved.<br>
+      Created by <a href="https://dinailongdigital.vercel.app" target="_blank" rel="noopener">dinailongdigital.vercel.app</a>
+    </div>
+  </div>
+
+  <script src="global-orders.js"></script>
+  <script>
+    lucide.createIcons();
+    var produk = null, buktiDataUrl = null, existingKode = null, existingOrder = null;
+    var q = new URLSearchParams(location.search);
+    existingKode = q.get("kode") || null;
+
+    function loadSettings() {
+      return VOXY.getSettings().then(function (s) {
+        s = s || {};
+        document.getElementById("rekeningBox").innerHTML = s.rekening
+          ? ("<b>Rekening:</b><br>" + s.rekening)
+          : "Hubungi admin untuk rekening.";
+        if (s.qrisUrl) document.getElementById("qrisImg").src = s.qrisUrl;
+        VOXY.applyBrandingToPage();
+      });
+    }
+
+    VOXY.requireAuth().then(function (user) {
+      loadSettings();
+      if (existingKode) {
+        return VOXY.getOrder(existingKode).then(function (o) {
+          if (!o) {
+            alert("Pesanan tidak ditemukan");
+            location.href = "home.html";
+            return;
+          }
+          existingOrder = o;
+          document.getElementById("namaProduk").textContent = o.nama || o.namaProduk || "-";
+          document.getElementById("kategori").textContent = o.kategori || o.jenis || "-";
+          document.getElementById("totalHarga").textContent = VOXY.formatRp(o.harga);
+        });
+      }
+      try { produk = JSON.parse(sessionStorage.getItem("produkDipilih") || "null"); } catch (e) { produk = null; }
+      if (!produk) { alert("Produk tidak ditemukan"); window.location.href = "home.html"; return; }
+      document.getElementById("namaProduk").textContent = produk.nama || "-";
+      document.getElementById("kategori").textContent = produk.kategori || "-";
+      var hargaTampil = (function () {
+        var flash = produk.flashSale === true || produk.flashSale === "true" || produk.flashSale === 1;
+        if (flash && produk.flashEnd && Date.now() >= Number(produk.flashEnd)) flash = false;
+        var normal = Number(produk.harga) || 0;
+        var disc = Number(produk.flashDiskon) || 0;
+        if (flash && disc > 0 && disc < 100) return Math.round(normal * (100 - disc) / 100);
+        var fh = Number(produk.flashHarga);
+        if (flash && fh > 0) return fh;
+        return normal;
+      })();
+      document.getElementById("totalHarga").textContent = VOXY.formatRp(hargaTampil);
+    });
+
+    document.getElementById("buktiFile").addEventListener("change", function (e) {
+      var file = e.target.files[0];
+      if (!file) return;
+      VOXY.fileToDataURL(file).then(function (url) {
+        buktiDataUrl = url;
+        var prev = document.getElementById("previewBukti");
+        prev.src = url; prev.classList.remove("hidden");
+      }).catch(function () { alert("Gagal membaca file"); });
+    });
+
+    function konfirmasi() {
+      if (!buktiDataUrl) { alert("Upload bukti transfer dulu"); return; }
+      var btn = document.getElementById("btnKonfirmasi");
+      btn.disabled = true; btn.textContent = "Mengirim...";
+
+      /* Order sudah ada (joki / pre-created) */
+      if (existingKode && existingOrder) {
+        VOXY.simpanBukti(existingKode, buktiDataUrl)
+          .then(function () {
+            return VOXY.updateOrder(existingKode, {
+              status: "Menunggu",
+              buktiUploaded: true,
+              updatedAt: Date.now()
+            });
+          })
+          .then(function () {
+            if (VOXY.showToast) VOXY.showToast("Bukti TF terkirim. Menunggu admin.");
+            setTimeout(function () { location.href = "riwayat.html"; }, 400);
+          })
+          .catch(function (err) {
+            alert(err.message || "Gagal kirim bukti");
+            btn.disabled = false; btn.textContent = "Konfirmasi Pembayaran";
+          });
+        return;
+      }
+
+      if (!produk) return;
+      var user = VOXY.getCurrentUser();
+      var harga = (function () {
+        var flash = produk.flashSale === true || produk.flashSale === "true" || produk.flashSale === 1;
+        if (flash && produk.flashEnd && Date.now() >= Number(produk.flashEnd)) flash = false;
+        var normal = Number(produk.harga) || 0;
+        var disc = Number(produk.flashDiskon) || 0;
+        if (flash && disc > 0 && disc < 100) return Math.round(normal * (100 - disc) / 100);
+        var fh = Number(produk.flashHarga);
+        if (flash && fh > 0) return fh;
+        return normal;
+      })();
+      var order = {
+        kode: VOXY.generateKode(),
+        produkId: produk.id || "",
+        nama: produk.nama || "",
+        namaProduk: produk.nama || "",
+        kategori: produk.kategori || "",
+        harga: harga,
+        hargaAsli: Number(produk.harga) || 0,
+        gambar: produk.gambar || "",
+        status: "Menunggu",
+        email: user ? user.email : "",
+        uid: user ? user.uid : "",
+        linkTarget: "",
+        catatan: "",
+        tipeKirim: produk.tipeKirim || "link",
+        buktiUploaded: true
+      };
+      VOXY.simpanOrder(order).then(function (kode) {
+        return VOXY.simpanBukti(kode, buktiDataUrl).then(function () { return kode; });
+      }).then(function (kode) {
+        sessionStorage.removeItem("produkDipilih");
+        var tipe = produk.tipeKirim || "";
+        var kat = (produk.kategori || "").toLowerCase();
+        if (tipe === "link_target" || produk.butuhTarget || kat.indexOf("suntik") !== -1) {
+          sessionStorage.setItem("kodePesanan", kode);
+          window.location.href = "jasa-link.html?kode=" + encodeURIComponent(kode);
+          return;
+        }
+        if (VOXY.showToast) VOXY.showToast("Pesanan terkirim. Menunggu verifikasi admin.");
+        setTimeout(function () { window.location.href = "riwayat.html"; }, 400);
+      }).catch(function (err) {
+        alert(err.message || "Gagal menyimpan pesanan");
+        btn.disabled = false; btn.textContent = "Konfirmasi Pembayaran";
+      });
+    }
+  </script>
+  <script src="music-player.js"></script>
+</body>
+</html>

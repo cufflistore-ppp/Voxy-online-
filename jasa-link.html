@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Isi Link Jasa - VOXY MARKET</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+  <script src="maintenance-gate.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <button class="icon-btn" onclick="history.back()"><i data-lucide="arrow-left"></i></button>
+    <div class="logo-area"><span>Link Target Jasa</span></div>
+    <div style="width:40px"></div>
+  </header>
+  <main class="page">
+    <div class="pay-card">
+      <h2>Isi Link / Target Suntik</h2>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:12px">
+        Halaman ini muncul khusus untuk produk <b>Jasa Suntik</b>. Masukkan link target yang akan diproses.
+      </p>
+      <div class="form-group"><label>Kode Pesanan</label><input id="kode" type="text" readonly></div>
+      <div class="form-group"><label>Link Target</label><textarea id="linkTarget" rows="3" placeholder="https://instagram.com/... atau link target"></textarea></div>
+      <div class="form-group"><label>Catatan (opsional)</label><input id="catatan" type="text" placeholder="Username, jumlah, dll"></div>
+      <button class="btn" style="width:100%" onclick="simpan()">Simpan & Lanjut</button>
+    </div>
+  </main>
+  <script src="global-orders.js"></script>
+  <script>
+    lucide.createIcons();
+    var kode = "";
+    VOXY.requireAuth().then(function () {
+      kode = new URLSearchParams(location.search).get("kode") || sessionStorage.getItem("kodePesanan") || "";
+      document.getElementById("kode").value = kode || "-";
+      if (!kode) { alert("Kode pesanan tidak ditemukan"); location.href = "riwayat.html"; }
+    });
+    function simpan() {
+      var link = document.getElementById("linkTarget").value.trim();
+      var catatan = document.getElementById("catatan").value.trim();
+      if (!link) { alert("Isi link target dulu"); return; }
+      VOXY.updateOrder(kode, { linkTarget: link, catatan: catatan }).then(function () {
+        sessionStorage.removeItem("kodePesanan");
+        if (VOXY.showToast) VOXY.showToast("Link tersimpan. Menunggu proses admin."); else alert("Link tersimpan. Menunggu proses admin.");
+        location.href = "riwayat.html";
+      }).catch(function (e) { alert(e.message || "Gagal"); });
+    }
+  </script>
+  <script src="music-player.js"></script>
+</body>
+</html>

@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Order Joki - VOXY MARKET</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+  <script src="maintenance-gate.js"></script>
+</head>
+<body>
+  <header class="app-header">
+    <button class="icon-btn" onclick="location.href='joki.html'"><i data-lucide="arrow-left"></i></button>
+    <div class="logo-area"><span id="pageTitle">Order Joki</span></div>
+    <div style="width:40px"></div>
+  </header>
+
+  <main class="page">
+    <div class="joki-box" id="paketInfo"></div>
+
+    <div class="joki-box">
+      <div class="joki-box-head">
+        <span class="joki-step">2</span>
+        <span>Data Order</span>
+      </div>
+      <div class="form-group">
+        <label>Nama Store</label>
+        <input type="text" id="jokiStore" placeholder="Nama store / brand" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>Nomor WhatsApp (62…)</label>
+        <input type="tel" id="jokiWa" placeholder="62812xxxxxxx" autocomplete="off">
+      </div>
+      <div class="joki-preview-wrap">
+        <div class="joki-preview-label">Format teks (otomatis)</div>
+        <div class="joki-preview" id="jokiPreview"></div>
+      </div>
+    </div>
+
+    <div class="joki-box" id="includeBox">
+      <div class="joki-box-head">
+        <span class="joki-step">3</span>
+        <span>Paket tambahan</span>
+      </div>
+      <div id="includeList"></div>
+    </div>
+
+    <div class="joki-total-box">
+      <span>Total bayar</span>
+      <strong id="jokiTotal">Rp 0</strong>
+    </div>
+    <button type="button" class="btn" style="width:100%;margin-top:12px" id="btnOrderJoki">Lanjut Bayar</button>
+  </main>
+
+  <nav class="bottom-nav">
+    <a href="home.html"><i data-lucide="home"></i>Home</a>
+    <a href="riwayat.html"><i data-lucide="receipt"></i>Transaksi</a>
+    <a href="akun.html"><i data-lucide="user"></i>Akun</a>
+  </nav>
+
+  <script src="global-orders.js"></script>
+  <script>
+    lucide.createIcons();
+    var PAKET_MAP = {};
+    var INCLUDES = [];
+    var selectedInclude = {};
+    var paket = null;
+
+    function normWa(n) {
+      n = String(n || "").replace(/\D/g, "");
+      if (n.startsWith("0")) n = "62" + n.slice(1);
+      if (n && !n.startsWith("62")) n = "62" + n;
+      return n;
+    }
+    function formatLabel(hari, jam, permanen) {
+      if (permanen) return "[Manen]";
+      var parts = [];
+      if (hari > 0) parts.push(hari + " hari");
+      if (jam > 0) parts.push(jam + "jam");
+      if (!parts.length) return "[ ]";
+      return "[" + parts.join(",") + "]";
+    }
+    function totalDurasi() {
+      var hari = paket ? (Number(paket.hari) || 0) : 0;
+      var jam = paket ? (Number(paket.jam) || 0) : 0;
+      var permanen = !!(paket && paket.permanen);
+      if (permanen) return { hari: 0, jam: 0, permanen: true };
+      INCLUDES.forEach(function (inc) {
+        if (!selectedInclude[inc.id] || inc.prioritas || inc.facecam) return;
+        hari += Number(inc.hari) || 0;
+        jam += Number(inc.jam) || 0;
+      });
+      return { hari: hari, jam: jam, permanen: false };
+    }
+    function buildPreview() {
+      var store = document.getElementById("jokiStore").value.trim() || "Nama Store";
+      var wa = normWa(document.getElementById("jokiWa").value) || "628…";
+      var d = totalDurasi();
+      var tengah = formatLabel(d.hari, d.jam, d.permanen);
+      return "*_SV BUYER DUBAI VOXY🧿_*\n        " + tengah + "\n*_SV ; " + store + "_*\nWa.me/" + wa + "\n\n*#NAMBAH VIEW SW + KONTAK + SELLER + BUYYER + DLL 🌤️🌈*";
+    }
+    function refreshPreview() {
+      document.getElementById("jokiPreview").textContent = buildPreview();
+      updateTotal();
+    }
+    function updateTotal() {
+      if (!paket) return;
+      var extra = 0;
+      INCLUDES.forEach(function (inc) {
+        if (selectedInclude[inc.id]) extra += Number(inc.harga) || 0;
+      });
+      document.getElementById("jokiTotal").textContent = VOXY.formatRp(Number(paket.harga) + extra);
+    }
+    function toggleInclude(id) {
+      selectedInclude[id] = !selectedInclude[id];
+      renderIncludes();
+      updateTotal();
+      refreshPreview();
+    }
+    function renderIncludes() {
+      document.getElementById("includeList").innerHTML = INCLUDES.map(function (inc) {
+        var on = !!selectedInclude[inc.id];
+        var badge = "";
+        if (inc.prioritas) badge = '<span class="joki-badge joki-badge-prio">PRIORITAS</span> ';
+        else if (inc.facecam) badge = '<span class="joki-badge joki-badge-facecam">FACECAM / VIDEO</span> ';
+        return (
+          '<div class="joki-row' + (on ? ' is-on' : '') + (inc.prioritas ? ' is-prio' : '') + (inc.facecam ? ' is-facecam' : '') + '">' +
+            '<div class="joki-row-info"><div class="joki-row-name">' + badge + (inc.nama || "") + '</div></div>' +
+            '<div class="joki-row-right">' +
+              '<span class="joki-row-price">+' + VOXY.formatRp(inc.harga) + '</span>' +
+              '<button type="button" class="joki-row-btn' + (on ? ' on' : '') + '" onclick="toggleInclude(\'' + inc.id + '\')">' +
+                (on ? 'Dipilih' : 'Pilih') +
+              '</button>' +
+            '</div>' +
+          '</div>'
+        );
+      }).join("");
+    }
+    function blockCopy(el) {
+      ["copy", "cut", "contextmenu", "selectstart"].forEach(function (ev) {
+        el.addEventListener(ev, function (e) { e.preventDefault(); });
+      });
+    }
+
+    function initPage(cfg) {
+      var list = (cfg && cfg.paket) || VOXY.DEFAULT_JOKI_PAKET || [];
+      list.forEach(function (p) { PAKET_MAP[p.id] = p; });
+      INCLUDES = (cfg && cfg.includes) || VOXY.DEFAULT_JOKI_INCLUDES || [];
+
+      var id = new URLSearchParams(location.search).get("id") || "";
+      paket = PAKET_MAP[id] || null;
+      if (!paket) {
+        document.getElementById("paketInfo").innerHTML = '<div class="empty-state">Paket tidak ditemukan. <a href="joki.html">Kembali</a></div>';
+        document.getElementById("btnOrderJoki").disabled = true;
+        return;
+      }
+      document.getElementById("pageTitle").textContent = paket.nama;
+      document.getElementById("paketInfo").innerHTML =
+        '<div class="joki-box-head"><span class="joki-step">1</span><span>Paket dipilih</span></div>' +
+        '<div class="joki-row" style="border:none;padding:0">' +
+          '<div class="joki-row-info">' +
+            '<div class="joki-row-name">' + paket.nama + '</div>' +
+            '<div class="joki-row-desc">' + (paket.desc || "") + '</div>' +
+          '</div>' +
+          '<div class="joki-row-right"><span class="joki-row-price">' + VOXY.formatRp(paket.harga) + '</span></div>' +
+        '</div>';
+      refreshPreview();
+      if (paket.permanen) {
+        var box = document.getElementById("includeBox");
+        if (box) box.style.display = "none";
+      } else {
+        renderIncludes();
+      }
+    }
+
+    document.getElementById("jokiStore").addEventListener("input", refreshPreview);
+    document.getElementById("jokiWa").addEventListener("input", refreshPreview);
+    blockCopy(document.getElementById("jokiPreview"));
+
+    document.getElementById("btnOrderJoki").onclick = function () {
+      if (!paket) return;
+      var store = document.getElementById("jokiStore").value.trim();
+      var wa = normWa(document.getElementById("jokiWa").value);
+      if (!store) return alert("Isi nama store");
+      if (!wa || wa.length < 10) return alert("Isi nomor WhatsApp valid");
+      var user = VOXY.getCurrentUser && VOXY.getCurrentUser();
+      if (!user) return (location.href = "login.html");
+
+      var includes = [];
+      var extra = 0;
+      INCLUDES.forEach(function (inc) {
+        if (selectedInclude[inc.id]) {
+          includes.push({ id: inc.id, nama: inc.nama, harga: Number(inc.harga) || 0, prioritas: !!inc.prioritas, facecam: !!inc.facecam });
+          extra += Number(inc.harga) || 0;
+        }
+      });
+      var total = Number(paket.harga) + extra;
+      var serobot = !!selectedInclude.prioritas;
+      var hasFacecam = !!selectedInclude.facecam;
+      var btn = document.getElementById("btnOrderJoki");
+      btn.disabled = true;
+      btn.textContent = "Menyimpan...";
+
+      VOXY.simpanOrder({
+        jenis: "joki",
+        produkId: paket.id,
+        nama: paket.nama,
+        namaProduk: paket.nama,
+        kategori: "Joki",
+        harga: total,
+        hargaDasar: paket.harga,
+        jokiIncludes: includes,
+        serobot: serobot,
+        serobotBiaya: serobot ? (includes.filter(function(x){return x.id==="prioritas";})[0] || {}).harga || 8000 : 0,
+        facecam: hasFacecam,
+        status: "Menunggu",
+        jokiStore: store,
+        jokiNamaJB: store,
+        jokiWa: wa,
+        jokiLabel: (function(){ var d=totalDurasi(); return formatLabel(d.hari,d.jam,d.permanen); })(),
+        jokiHari: totalDurasi().hari,
+        jokiJam: totalDurasi().jam,
+        jokiPreview: buildPreview(),
+        deskripsi: paket.desc || "",
+        uid: user.uid,
+        email: user.email || ""
+      }).then(function (kode) {
+        location.href = "pembayaran.html?kode=" + encodeURIComponent(kode);
+      }).catch(function (e) {
+        alert(e.message || "Gagal buat order");
+        btn.disabled = false;
+        btn.textContent = "Lanjut Bayar";
+      });
+    };
+
+    VOXY.requireAuth().then(function () {
+      VOXY.getJokiConfig().then(initPage).catch(function () {
+        initPage({ paket: VOXY.DEFAULT_JOKI_PAKET, includes: VOXY.DEFAULT_JOKI_INCLUDES });
+      });
+    });
+  </script>
+  <script src="music-player.js"></script>
+</body>
+</html>
